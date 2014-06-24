@@ -24,6 +24,13 @@
 #include <ipu_pixfmt.h>
 #include <asm/io.h>
 #include <asm/arch/sys_proto.h>
+#include <asm/imx-common/mxc_i2c.h>
+#include <i2c.h>
+
+#ifdef CONFIG_IMX_SPI_CDCM6208
+#include "common/cdcm6208.h"
+#endif
+
 DECLARE_GLOBAL_DATA_PTR;
 
 #define UART_PAD_CTRL  (PAD_CTL_PUS_100K_UP |			\
@@ -39,6 +46,10 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define SPI_PAD_CTRL (PAD_CTL_HYS | PAD_CTL_SPEED_MED | \
 		      PAD_CTL_DSE_40ohm | PAD_CTL_SRE_FAST)
+		      
+#define I2C_PAD_CTRL	(PAD_CTL_PUS_100K_UP |			\
+	PAD_CTL_SPEED_MED | PAD_CTL_DSE_40ohm | PAD_CTL_HYS |	\
+	PAD_CTL_ODE | PAD_CTL_SRE_FAST)
 
 int dram_init(void)
 {
@@ -80,8 +91,8 @@ iomux_v3_cfg_t const ecspi3_pads[] = {
 	MX6_PAD_DISP0_DAT2__ECSPI3_MISO | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_DISP0_DAT3__ECSPI3_SS0 | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_DISP0_DAT4__ECSPI3_SS1 | MUX_PAD_CTRL(SPI_PAD_CTRL),
-//	MX6_PAD_DISP0_DAT7__ECSPI3_SS2 | MUX_PAD_CTRL(SPI_PAD_CTRL),
-//	MX6_PAD_DISP0_DAT8__ECSPI3_SS3 | MUX_PAD_CTRL(SPI_PAD_CTRL),	
+	MX6_PAD_DISP0_DAT7__GPIO4_IO28 | MUX_PAD_CTRL(SPI_PAD_CTRL),
+	MX6_PAD_DISP0_DAT8__GPIO4_IO29 | MUX_PAD_CTRL(SPI_PAD_CTRL),	
 };
 
 iomux_v3_cfg_t const extra_pads[] = {
@@ -94,10 +105,82 @@ iomux_v3_cfg_t const extra_pads[] = {
 	MX6_PAD_GPIO_9__GPIO1_IO09 | MUX_PAD_CTRL(SPI_PAD_CTRL),			/* FPGA reset_n */	
 };
 
+#define PC MUX_PAD_CTRL(I2C_PAD_CTRL)
+
+/* I2C2 SGTL5000, MMFP0100, FPGA, DS1342, LMH0303 */
+struct i2c_pads_info i2c_pad_info1 = {
+	.scl = {
+		.i2c_mode = MX6_PAD_KEY_COL3__I2C2_SCL | PC,
+		.gpio_mode = MX6_PAD_KEY_COL3__GPIO4_IO12 | PC,
+		.gp = IMX_GPIO_NR(4, 12)
+	},
+	.sda = {
+		.i2c_mode = MX6_PAD_KEY_ROW3__I2C2_SDA | PC,
+		.gpio_mode = MX6_PAD_KEY_ROW3__GPIO4_IO13 | PC,
+		.gp = IMX_GPIO_NR(4, 13)
+	}
+};
+
+
+#ifdef CONFIG_IMX_ECSPI
+s32 spi_get_cfg(struct imx_spi_dev_t *dev)
+{
+	switch (dev->slave.cs) 
+	{
+		case 0:
+			/* CDCM6208 */
+			dev->base = ECSPI3_BASE_ADDR;
+			dev->freq = 2500000;
+			dev->ss_pol = IMX_SPI_ACTIVE_LOW;
+			dev->ss = 0;
+			dev->fifo_sz = 64 * 4;
+			dev->us_delay = 0;
+			break;
+		default:
+			printf("Invalid Bus ID!\n");
+	}
+
+	return 0;
+}
+
+void spi_io_init(struct imx_spi_dev_t *dev)
+{
+	u32 reg;
+
+	switch (dev->base)
+	{
+		case ECSPI3_BASE_ADDR:
+			/* Enable clock */
+			reg = readl(CCM_BASE_ADDR + CLKCTL_CCGR1);
+			reg |= (0x3 << 4);
+			writel(reg, CCM_BASE_ADDR + CLKCTL_CCGR1);
+
+			/* SCLK */
+			imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT0__ECSPI3_SCLK);
+
+			/* MISO */
+			imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT2__ECSPI3_MISO);
+
+			/* MOSI */
+			imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT1__ECSPI3_MOSI);
+
+			/* SS0 */
+			imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT3__ECSPI3_SS0);
+			break;
+		default:
+			break;
+	}
+}
+#endif
+
+struct spi_slave *cdcm8208_spi_slave = (struct spi_slave *)NULL;
+
 static void setup_spi(void)
 {
 	imx_iomux_v3_setup_multiple_pads(ecspi3_pads, ARRAY_SIZE(ecspi3_pads));
 }
+
+
 
 static void setup_iomux_uart(void)
 {
@@ -231,9 +314,15 @@ int board_init(void)
 	setup_spi();
 #endif
 
+	setup_i2c(1, CONFIG_SYS_I2C_SPEED, 0x7f, &i2c_pad_info1);
+	
+#ifdef CONFIG_CMD_SATA
+	setup_sata();
+#endif
+
 	/* Reset all chips */
 	extra_init();
-
+	
 	return 0;
 }
 
@@ -249,6 +338,15 @@ static const struct boot_mode board_boot_modes[] = {
 
 int board_late_init(void)
 {
+	puts("Entering late board init...\n");
+
+#ifdef CONFIG_IMX_SPI_CDCM6208
+	puts("Probing CDCM6208...\n");
+	if (cdcm8208_spi_slave = spi_cdcm6208_probe()) {
+		show_cdcm6208_info(cdcm8208_spi_slave);
+	}
+#endif
+	
 #ifdef CONFIG_CMD_BMODE
 	add_board_boot_modes(board_boot_modes);
 #endif

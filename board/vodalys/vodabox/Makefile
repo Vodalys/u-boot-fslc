@@ -6,4 +6,5 @@
 # SPDX-License-Identifier:	GPL-2.0+
 #
 
-obj-y  := vodabox3.o
+obj-$(CONFIG_IMX_SPI_CDCM6208) += cdcm6208.o
+obj-y  += vodabox3.o
