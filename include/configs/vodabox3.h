@@ -12,6 +12,11 @@
 #include <asm/arch/imx-regs.h>
 #include <asm/imx-common/gpio.h>
 
+#define CONFIG_MX6
+#define CONFIG_DISPLAY_CPUINFO
+#define CONFIG_DISPLAY_BOARDINFO
+#define	CONFIG_BOARD_EARLY_INIT_F
+
 #define CONFIG_MACH_TYPE	3980
 #define CONFIG_MXC_UART_BASE	UART1_BASE
 #define CONFIG_CONSOLE_DEV		"ttymxc0"
@@ -25,11 +30,13 @@
 
 #define CONFIG_SUPPORT_EMMC_BOOT /* eMMC specific */
 
+#define CONFIG_CMD_BMODE
+
 #include "mx6sabre_common.h"
 
-#define CONFIG_SYS_FSL_USDHC_NUM	3
+#define CONFIG_SYS_FSL_USDHC_NUM	2
 #if defined(CONFIG_ENV_IS_IN_MMC)
-#define CONFIG_SYS_MMC_ENV_DEV		1	/* SDHC3 */
+#define CONFIG_SYS_MMC_ENV_DEV		0
 #endif
 
 /* Framebuffer */
