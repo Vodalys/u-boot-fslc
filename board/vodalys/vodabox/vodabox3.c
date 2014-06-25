@@ -46,7 +46,7 @@ DECLARE_GLOBAL_DATA_PTR;
 
 #define SPI_PAD_CTRL (PAD_CTL_HYS | PAD_CTL_SPEED_MED | \
 		      PAD_CTL_DSE_40ohm | PAD_CTL_SRE_FAST)
-		      
+
 #define I2C_PAD_CTRL	(PAD_CTL_PUS_100K_UP |			\
 	PAD_CTL_SPEED_MED | PAD_CTL_DSE_40ohm | PAD_CTL_HYS |	\
 	PAD_CTL_ODE | PAD_CTL_SRE_FAST)
@@ -93,7 +93,7 @@ iomux_v3_cfg_t const ecspi3_pads[] = {
 	MX6_PAD_DISP0_DAT3__ECSPI3_SS0 | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_DISP0_DAT4__ECSPI3_SS1 | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_DISP0_DAT7__GPIO4_IO28 | MUX_PAD_CTRL(SPI_PAD_CTRL),
-	MX6_PAD_DISP0_DAT8__GPIO4_IO29 | MUX_PAD_CTRL(SPI_PAD_CTRL),	
+	MX6_PAD_DISP0_DAT8__GPIO4_IO29 | MUX_PAD_CTRL(SPI_PAD_CTRL),
 };
 
 iomux_v3_cfg_t const extra_pads[] = {
@@ -103,7 +103,7 @@ iomux_v3_cfg_t const extra_pads[] = {
 	MX6_PAD_SD1_CMD__GPIO1_IO18 | MUX_PAD_CTRL(SPI_PAD_CTRL),		/* ADV7604 reset_n */
 	MX6_PAD_SD1_CLK__GPIO1_IO20 | MUX_PAD_CTRL(SPI_PAD_CTRL),		/* ADV7611 reset_n */
 	MX6_PAD_SD1_DAT2__GPIO1_IO19 | MUX_PAD_CTRL(SPI_PAD_CTRL),		/* ADV7604 powerdown_n */
-	MX6_PAD_GPIO_9__GPIO1_IO09 | MUX_PAD_CTRL(SPI_PAD_CTRL),			/* FPGA reset_n */	
+	MX6_PAD_GPIO_9__GPIO1_IO09 | MUX_PAD_CTRL(SPI_PAD_CTRL),			/* FPGA reset_n */
 };
 
 #define PC MUX_PAD_CTRL(I2C_PAD_CTRL)
@@ -126,7 +126,7 @@ struct i2c_pads_info i2c_pad_info1 = {
 #ifdef CONFIG_IMX_ECSPI
 s32 spi_get_cfg(struct imx_spi_dev_t *dev)
 {
-	switch (dev->slave.cs) 
+	switch (dev->slave.cs)
 	{
 		case 0:
 			/* CDCM6208 */
@@ -181,22 +181,113 @@ static void setup_spi(void)
 	imx_iomux_v3_setup_multiple_pads(ecspi3_pads, ARRAY_SIZE(ecspi3_pads));
 }
 
-
-
 static void setup_iomux_uart(void)
 {
 	imx_iomux_v3_setup_multiple_pads(uart1_pads, ARRAY_SIZE(uart1_pads));
 }
 
+#ifdef CONFIG_FEC_MXC
+
+iomux_v3_cfg_t enet_pads[] =
+{
+	/* LAN8720A */
+	MX6_PAD_ENET_MDIO__ENET_MDIO		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_ENET_MDC__ENET_MDC		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_ENET_TX_EN__ENET_TX_EN		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_ENET_TXD0__ENET_TX_DATA0		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_ENET_TXD1__ENET_TX_DATA1		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+
+	MX6_PAD_ENET_CRS_DV__ENET_RX_EN		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_ENET_RX_ER__ENET_RX_ER		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_ENET_RXD0__ENET_RX_DATA0		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_ENET_RXD1__ENET_RX_DATA1		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_GPIO_16__ENET_REF_CLK		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+	MX6_PAD_GPIO_4__GPIO1_IO04		| MUX_PAD_CTRL(NO_PAD_CTRL), /* Reset */
+};
+
+#define ETH_PHY_RESET	IMX_GPIO_NR(1, 4)
+
+static void setup_iomux_enet(void)
+{
+	imx_iomux_v3_setup_multiple_pads(enet_pads, ARRAY_SIZE(enet_pads));
+	/* Reset LAN8720A PHY */
+	gpio_direction_output(ETH_PHY_RESET, 0);
+	udelay(1000);
+	gpio_set_value(ETH_PHY_RESET, 1);
+}
+
+int board_eth_init(bd_t *bis)
+{
+	setup_iomux_enet();
+
+	return cpu_eth_init(bis);
+}
+
+#define ANATOP_PLL_LOCK                 0x80000000
+#define ANATOP_PLL_PWDN_MASK            0x00001000
+#define ANATOP_PLL_BYPASS_MASK          0x00010000
+#define ANATOP_FEC_PLL_ENABLE_MASK      0x00002000
+
+static int setup_fec(void)
+{
+	u32 reg = 0;
+	s32 timeout = 100000;
+
+	/*
+     * get enet tx reference clk from internal clock from anatop
+     * GPR1[21] = 1
+     */
+	reg =  readl(IOMUXC_BASE_ADDR + 0x4);
+	reg |= (0x1 << 21);
+	writel(reg, IOMUXC_BASE_ADDR + 0x4);
+
+	/* Set fast slew rate and medium speed for clock pin */
+	reg =  readl(IOMUXC_BASE_ADDR + 0x618);
+	reg |= PAD_CTL_SPEED_MED | PAD_CTL_SRE_FAST;
+	writel(reg, IOMUXC_BASE_ADDR + 0x618);
+
+	/* Set daisy bit in IOMUXC_ENET_REF_CLK_SELECT_INPUT register */
+	writel(1, IOMUXC_BASE_ADDR + 0x83c);
+
+	/* Enable PLLs */
+	reg = readl(ANATOP_BASE_ADDR + 0xe0); /* ENET PLL */
+	if ((reg & ANATOP_PLL_PWDN_MASK) || (!(reg & ANATOP_PLL_LOCK)))
+	{
+		reg &= ~ANATOP_PLL_PWDN_MASK;
+		writel(reg, ANATOP_BASE_ADDR + 0xe0);
+		while (timeout--)
+		{
+			if (readl(ANATOP_BASE_ADDR + 0xe0) & ANATOP_PLL_LOCK)
+			{
+				break;
+			}
+		}
+
+		if (timeout <= 0)
+		{
+			return -1;
+		}
+	}
+
+	/* Enable FEC clock */
+	reg |= ANATOP_FEC_PLL_ENABLE_MASK;
+	reg &= ~ANATOP_PLL_BYPASS_MASK;
+	writel(reg, ANATOP_BASE_ADDR + 0xe0);
+
+	return 0;
+}
+
+#endif
+
+
 static void extra_init(void)
 {
 	unsigned int reg;
 	puts("Reset all peripherals...\n");
-	
-	imx_iomux_v3_setup_multiple_pads(extra_pads, ARRAY_SIZE(extra_pads));	
-	//imx_iomux_v3_setup_multiple_pads(enet_pads, ARRAY_SIZE(enet_pads));
 
-	/* All resets simultaneously including Ethernet PHY */
+	imx_iomux_v3_setup_multiple_pads(extra_pads, ARRAY_SIZE(extra_pads));
+
+	/* All resets simultaneously */
 	reg = readl(GPIO1_BASE_ADDR + 0x0);
 	reg &= ~((1 << 3) | (1 << 4) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 18) | (1 << 19) | (1 << 20));
 	writel(reg, GPIO1_BASE_ADDR + 0x0);
@@ -209,7 +300,7 @@ static void extra_init(void)
 
 	reg = readl(GPIO1_BASE_ADDR + 0x0);
 	reg |= ((1 << 3) | (1 << 4) | (1 << 7) | (1 << 8) | (1 << 9) | (1 << 18) | (1 << 19) | (1 << 20));
-	writel(reg, GPIO1_BASE_ADDR + 0x0);	
+	writel(reg, GPIO1_BASE_ADDR + 0x0);
 }
 
 #ifdef CONFIG_FSL_ESDHC
@@ -249,7 +340,7 @@ int board_mmc_init(bd_t *bis)
 	 * mmc0                    SD3
 	 * mmc1                    SD4
 	 */
-	
+
 	for (i = 0; i < CONFIG_SYS_FSL_USDHC_NUM; i++) {
 		switch (i) {
 		case 0:
@@ -270,7 +361,7 @@ int board_mmc_init(bd_t *bis)
 			       i + 1, CONFIG_SYS_FSL_USDHC_NUM);
 			return status;
 		}
-		
+
 		status |= fsl_esdhc_initialize(bis, &usdhc_cfg[i]);
 
 	}
@@ -302,7 +393,7 @@ int board_init(void)
 
 	/* address of boot parameters */
 	gd->bd->bi_boot_params = PHYS_SDRAM + 0x100;
-	
+
 	/* need set Power Supply Glitch to 0x41736166
 	 * and need clear Power supply Glitch Detect bit
 	 * when POR or reboot or power on Otherwise system
@@ -313,20 +404,24 @@ int board_init(void)
 	reg = readl(SNVS_BASE_ADDR + 0x4c);
 	reg |= (1 << 3);
 	writel(reg, SNVS_BASE_ADDR + 0x4c);/*clear LPSR*/
-	
+
 #ifdef CONFIG_MXC_SPI
 	setup_spi();
 #endif
 
 	setup_i2c(1, CONFIG_SYS_I2C_SPEED, 0x7f, &i2c_pad_info1);
-	
+
 #ifdef CONFIG_CMD_SATA
 	setup_sata();
 #endif
 
+#ifdef CONFIG_FEC_MXC
+	setup_fec();
+#endif
+
 	/* Reset all chips */
 	extra_init();
-	
+
 	/* Power off LEDs */
 	gpio_direction_output(IMX_GPIO_NR(6, 11), 0);
 	gpio_direction_output(IMX_GPIO_NR(6, 14), 0);
@@ -356,7 +451,7 @@ int board_late_init(void)
 		show_cdcm6208_info(cdcm8208_spi_slave);
 	}
 #endif
-	
+
 #ifdef CONFIG_CMD_BMODE
 	add_board_boot_modes(board_boot_modes);
 #endif
