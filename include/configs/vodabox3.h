@@ -10,41 +10,53 @@
 #define __VODABOX3_CONFIG_H
 #include "mx6_common.h"
 
-#define DEBUG 1
-
 #define CONFIG_MX6
 #define CONFIG_DISPLAY_CPUINFO
 #define CONFIG_DISPLAY_BOARDINFO
 
 #define CONFIG_MACH_TYPE	3980
+#define CONFIG_CONSOLE_DEV		"ttymxc0"
+#define CONFIG_MMCROOT			"/dev/mmcblk0p2"
+#if defined(CONFIG_MX6Q)
+#define CONFIG_DEFAULT_FDT_FILE	"imx6q-sabresd-ldo.dtb"
+#elif defined(CONFIG_MX6DL)
+#define CONFIG_DEFAULT_FDT_FILE	"imx6dl-sabresd-ldo.dtb"
+#endif
 
 #include <asm/arch/imx-regs.h>
 #include <asm/imx-common/gpio.h>
 
-#define CONFIG_CMDLINE_TAG
+#define	CONFIG_BOARD_EARLY_INIT_F
+
+#define BOARD_LATE_INIT
+
+#define CONFIG_CMDLINE_TAG	/* enable passing of ATAGs */
+#define CONFIG_REVISION_TAG
 #define CONFIG_SETUP_MEMORY_TAGS
 #define CONFIG_INITRD_TAG
-#define CONFIG_REVISION_TAG
-
-#define	CONFIG_BOARD_EARLY_INIT_F
+#define CONFIG_MXC_GPIO
 
 #define CONFIG_MXC_UART
 #define CONFIG_MXC_UART_BASE	UART1_BASE
+/* allow to overwrite serial and ethaddr */
+#define CONFIG_ENV_OVERWRITE
+#define CONFIG_CONS_INDEX	       1
+#define CONFIG_BAUDRATE			       115200
+#define CONFIG_SYS_BAUDRATE_TABLE	{9600, 19200, 38400, 57600, 115200}
 
 #define PHYS_SDRAM_SIZE		(1u * 1024 * 1024 * 1024)
 
-#define CONFIG_SUPPORT_EMMC_BOOT /* eMMC specific */
+//#define CONFIG_SUPPORT_EMMC_BOOT /* eMMC specific */
 
-#define CONFIG_CMD_BMODE
+//#define CONFIG_CMD_BMODE
 
 #include "mx6sabre_common.h"
-
+/*
 #define	CONFIG_EXTRA_ENV_SETTINGS					\
 		"netdev=eth0\0"						\
 		"ethprime=FEC0\0"					\
 		"uboot=u-boot.bin\0"			\
 		"kernel=uImage\0"				\
-		"setenv stdout serial ; " \
 		"nfsroot=/opt/eldk/arm\0"				\
 		"bootargs_base=setenv bootargs console=ttymxc1,115200\0"\
 		"bootargs_nfs=setenv bootargs ${bootargs} root=/dev/nfs "\
@@ -57,7 +69,7 @@
 		"mmc dev 0; "	\
 		"mmc read ${loadaddr} 0x800 0x2000; bootm\0"	\
 		"bootcmd=run bootcmd_net\0"                             \
-
+*/
 
 #define CONFIG_SYS_FSL_USDHC_NUM	2
 #if defined(CONFIG_ENV_IS_IN_MMC)
@@ -91,7 +103,7 @@
 #endif
 
 /* Framebuffer */
-#define CONFIG_VIDEO
+/*#define CONFIG_VIDEO
 #define CONFIG_VIDEO_IPUV3
 #define CONFIG_CFB_CONSOLE
 #define CONFIG_VGA_AS_SINGLE_DEVICE
@@ -105,12 +117,7 @@
 #define CONFIG_VIDEO_BMP_LOGO
 #define CONFIG_IPUV3_CLK 260000000
 #define CONFIG_IMX_HDMI
-
-/* allow to overwrite serial and ethaddr */
-#define CONFIG_ENV_OVERWRITE
-#define CONFIG_CONS_INDEX	       1
-#define CONFIG_BAUDRATE			       115200
-
+*/
 /* Command definition */
 #include <config_cmd_default.h>
 
@@ -118,6 +125,11 @@
 
 #undef CONFIG_BOOTDELAY
 #define CONFIG_BOOTDELAY	       3
+
+#define CONFIG_LOADADDR		0x10800000	/* loadaddr env var */
+#define CONFIG_RD_LOADADDR	(0x1300000)
+
+#define CONFIG_CMD_ENV
 
 #define CONFIG_PREBOOT                 ""
 
@@ -129,31 +141,56 @@
 
 /* Print Buffer Size */
 #define CONFIG_SYS_PBSIZE (CONFIG_SYS_CBSIZE + sizeof(CONFIG_SYS_PROMPT) + 16)
-#define CONFIG_SYS_MAXARGS	       16
-#define CONFIG_SYS_BARGSIZE CONFIG_SYS_CBSIZE
+#define CONFIG_SYS_MAXARGS	16	/* max number of command args */
+#define CONFIG_SYS_BARGSIZE CONFIG_SYS_CBSIZE /* Boot Argument Buffer Size */
 
-#define CONFIG_SYS_MEMTEST_START       0x10000000
-#define CONFIG_SYS_MEMTEST_END	       0x10010000
-#define CONFIG_SYS_MEMTEST_SCRATCH     0x10800000
+#define CONFIG_SYS_MEMTEST_START	0x10000000	/* memtest works on */
+#define CONFIG_SYS_MEMTEST_END		0x10010000
+
 
 #define CONFIG_SYS_LOAD_ADDR	       CONFIG_LOADADDR
 
 #define CONFIG_CMDLINE_EDITING
 
-/* Physical Memory Map */
-#define CONFIG_NR_DRAM_BANKS	       1
-#define PHYS_SDRAM		       MMDC0_ARB_BASE_ADDR
+/*-----------------------------------------------------------------------
+ * Physical Memory Map
+ */
+#define CONFIG_NR_DRAM_BANKS	1
+#define PHYS_SDRAM_1		CSD0_DDR_BASE_ADDR
+#define PHYS_SDRAM_1_SIZE	(1u * 1024 * 1024 * 1024)
+#define iomem_valid_addr(addr, size) (addr >= PHYS_SDRAM_1 && addr <= (PHYS_SDRAM_1 + PHYS_SDRAM_1_SIZE))
 
-#define CONFIG_SYS_SDRAM_BASE	       PHYS_SDRAM
-#define CONFIG_SYS_INIT_RAM_ADDR       IRAM_BASE_ADDR
-#define CONFIG_SYS_INIT_RAM_SIZE       IRAM_SIZE
+/*-----------------------------------------------------------------------
+ * FLASH and environment organization
+ */
+#define CONFIG_SYS_NO_FLASH
 
-#define CONFIG_SYS_INIT_SP_OFFSET \
-	(CONFIG_SYS_INIT_RAM_SIZE - GENERATED_GBL_DATA_SIZE)
-#define CONFIG_SYS_INIT_SP_ADDR \
-	(CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_INIT_SP_OFFSET)
-	
-	
+/* Monitor at beginning of flash */
+#define CONFIG_FSL_ENV_IN_MMC
+/* #define CONFIG_FSL_ENV_IN_NAND */
+/* #define CONFIG_FSL_ENV_IN_SATA */
+
+#define CONFIG_ENV_SECT_SIZE    (8 * 1024)
+#define CONFIG_ENV_SIZE         CONFIG_ENV_SECT_SIZE
+
+#if defined(CONFIG_FSL_ENV_IN_NAND)
+	#define CONFIG_ENV_IS_IN_NAND 1
+	#define CONFIG_ENV_OFFSET	0x100000
+#elif defined(CONFIG_FSL_ENV_IN_MMC)
+	#define CONFIG_ENV_IS_IN_MMC	1
+	#define CONFIG_ENV_OFFSET	(768 * 1024)
+#elif defined(CONFIG_FSL_ENV_IN_SATA)
+	#define CONFIG_ENV_IS_IN_SATA   1
+	#define CONFIG_SATA_ENV_DEV     0
+	#define CONFIG_ENV_OFFSET       (768 * 1024)
+#elif defined(CONFIG_FSL_ENV_IN_SF)
+	#define CONFIG_ENV_IS_IN_SPI_FLASH	1
+	#define CONFIG_ENV_SPI_CS		1
+	#define CONFIG_ENV_OFFSET       (768 * 1024)
+#else
+	#define CONFIG_ENV_IS_NOWHERE	1
+#endif
+
 
 #if 0
 /* CDCM6208 */

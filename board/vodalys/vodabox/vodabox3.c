@@ -70,6 +70,7 @@ iomux_v3_cfg_t const usdhc3_pads[] = {
 	MX6_PAD_SD3_DAT1__SD3_DATA1 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_SD3_DAT2__SD3_DATA2 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
 	MX6_PAD_SD3_DAT3__SD3_DATA3 | MUX_PAD_CTRL(USDHC_PAD_CTRL),
+	MX6_PAD_SD1_DAT0__GPIO1_IO16 | MUX_PAD_CTRL(USDHC_PAD_CTRL), /* CD */
 };
 
 iomux_v3_cfg_t const usdhc4_pads[] = {
@@ -213,11 +214,12 @@ static void extra_init(void)
 
 #ifdef CONFIG_FSL_ESDHC
 
-struct fsl_esdhc_cfg usdhc_cfg[3] = {
+struct fsl_esdhc_cfg usdhc_cfg[] = {
 	{USDHC3_BASE_ADDR},
 	{USDHC4_BASE_ADDR},
 };
 
+#define USDHC3_CD_GPIO	IMX_GPIO_NR(1, 16)
 
 int board_mmc_getcd(struct mmc *mmc)
 {
@@ -226,7 +228,7 @@ int board_mmc_getcd(struct mmc *mmc)
 
 	switch (cfg->esdhc_base) {
 	case USDHC3_BASE_ADDR:
-		ret = 1; //!gpio_get_value(USDHC3_CD_GPIO);
+		ret = gpio_get_value(USDHC3_CD_GPIO);
 		break;
 	case USDHC4_BASE_ADDR:
 		ret = 1; /* eMMC/uSDHC4 is always present */
@@ -253,12 +255,14 @@ int board_mmc_init(bd_t *bis)
 		case 0:
 			imx_iomux_v3_setup_multiple_pads(
 				usdhc3_pads, ARRAY_SIZE(usdhc3_pads));
-			usdhc_cfg[1].sdhc_clk = mxc_get_clock(MXC_ESDHC3_CLK);
+			usdhc_cfg[0].sdhc_clk = mxc_get_clock(MXC_ESDHC3_CLK);
+			usdhc_cfg[0].max_bus_width = 4;
 			break;
 		case 1:
 			imx_iomux_v3_setup_multiple_pads(
 				usdhc4_pads, ARRAY_SIZE(usdhc4_pads));
-			usdhc_cfg[2].sdhc_clk = mxc_get_clock(MXC_ESDHC4_CLK);
+			usdhc_cfg[1].sdhc_clk = mxc_get_clock(MXC_ESDHC4_CLK);
+			usdhc_cfg[1].max_bus_width = 8;
 			break;
 		default:
 			printf("Warning: you configured more USDHC controllers"
@@ -323,6 +327,12 @@ int board_init(void)
 	/* Reset all chips */
 	extra_init();
 	
+	/* Power off LEDs */
+	gpio_direction_output(IMX_GPIO_NR(6, 11), 0);
+	gpio_direction_output(IMX_GPIO_NR(6, 14), 0);
+	gpio_direction_output(IMX_GPIO_NR(6, 15), 0);
+	gpio_direction_output(IMX_GPIO_NR(6, 16), 0);
+
 	return 0;
 }
 
