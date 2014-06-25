@@ -152,6 +152,24 @@
 
 #define CONFIG_CMDLINE_EDITING
 
+/* Add support of LAN8720 */
+#define CONFIG_CMD_PING
+#define CONFIG_CMD_DHCP
+#define CONFIG_CMD_MII
+#define CONFIG_CMD_NET
+#define CONFIG_FEC_MXC
+#define CONFIG_MII
+#define IMX_FEC_BASE			ENET_BASE_ADDR
+#define CONFIG_FEC_XCV_TYPE		RMII
+#define CONFIG_ETHPRIME			"FEC"
+#define CONFIG_FEC_MXC_PHYADDR		0
+
+#define CONFIG_PHYLIB
+#define CONFIG_PHY_SMSC
+#define CONFIG_IPADDR			192.168.1.250
+#define CONFIG_SERVERIP			192.168.1.192
+#define CONFIG_NETMASK			255.255.255.0
+
 /*-----------------------------------------------------------------------
  * Physical Memory Map
  */
@@ -192,9 +210,9 @@
 #endif
 
 
+#define CONFIG_MXC_SPI
 #if 0
 /* CDCM6208 */
-#define CONFIG_MXC_SPI
 #define	CONFIG_IMX_SPI_CDCM6208
 #define	CONFIG_IMX_SPI_CDCM6208_BUS	2
 #define CONFIG_IMX_SPI_CDCM6208_CS	0
