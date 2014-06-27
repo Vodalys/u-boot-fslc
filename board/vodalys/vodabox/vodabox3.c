@@ -10,6 +10,7 @@
 #include <asm/arch/imx-regs.h>
 #include <asm/arch/iomux.h>
 #include <asm/arch/mx6-pins.h>
+#include <asm/arch/crm_regs.h>
 #include <asm/errno.h>
 #include <asm/gpio.h>
 #include <asm/imx-common/iomux-v3.h>
@@ -26,6 +27,7 @@
 #include <asm/arch/sys_proto.h>
 #include <asm/imx-common/mxc_i2c.h>
 #include <i2c.h>
+#include <spi.h>
 
 #ifdef CONFIG_IMX_SPI_CDCM6208
 #include "common/cdcm6208.h"
@@ -90,20 +92,20 @@ iomux_v3_cfg_t const ecspi3_pads[] = {
 	MX6_PAD_DISP0_DAT0__ECSPI3_SCLK | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_DISP0_DAT1__ECSPI3_MOSI | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_DISP0_DAT2__ECSPI3_MISO | MUX_PAD_CTRL(SPI_PAD_CTRL),
-	MX6_PAD_DISP0_DAT3__ECSPI3_SS0 | MUX_PAD_CTRL(SPI_PAD_CTRL),
-	MX6_PAD_DISP0_DAT4__ECSPI3_SS1 | MUX_PAD_CTRL(SPI_PAD_CTRL),
-	MX6_PAD_DISP0_DAT7__GPIO4_IO28 | MUX_PAD_CTRL(SPI_PAD_CTRL),
-	MX6_PAD_DISP0_DAT8__GPIO4_IO29 | MUX_PAD_CTRL(SPI_PAD_CTRL),
+/*	MX6_PAD_DISP0_DAT3__ECSPI3_SS0	| MUX_PAD_CTRL(SPI_PAD_CTRL),
+	MX6_PAD_DISP0_DAT4__GPIO4_IO25	| MUX_PAD_CTRL(NO_PAD_CTRL),
+	MX6_PAD_DISP0_DAT7__GPIO4_IO28	| MUX_PAD_CTRL(NO_PAD_CTRL),
+	MX6_PAD_DISP0_DAT8__GPIO4_IO29	| MUX_PAD_CTRL(NO_PAD_CTRL),*/
 };
 
 iomux_v3_cfg_t const extra_pads[] = {
-	MX6_PAD_GPIO_3__GPIO1_IO03 | MUX_PAD_CTRL(SPI_PAD_CTRL),			/* SDI reset_n */
-	MX6_PAD_GPIO_7__GPIO1_IO07 | MUX_PAD_CTRL(SPI_PAD_CTRL),			/* USB reset_n */
-	MX6_PAD_GPIO_8__GPIO1_IO08 | MUX_PAD_CTRL(SPI_PAD_CTRL),			/* CDCM6208 reset_n */
-	MX6_PAD_SD1_CMD__GPIO1_IO18 | MUX_PAD_CTRL(SPI_PAD_CTRL),		/* ADV7604 reset_n */
-	MX6_PAD_SD1_CLK__GPIO1_IO20 | MUX_PAD_CTRL(SPI_PAD_CTRL),		/* ADV7611 reset_n */
-	MX6_PAD_SD1_DAT2__GPIO1_IO19 | MUX_PAD_CTRL(SPI_PAD_CTRL),		/* ADV7604 powerdown_n */
-	MX6_PAD_GPIO_9__GPIO1_IO09 | MUX_PAD_CTRL(SPI_PAD_CTRL),			/* FPGA reset_n */
+	MX6_PAD_GPIO_3__GPIO1_IO03 | MUX_PAD_CTRL(NO_PAD_CTRL),			/* SDI reset_n */
+	MX6_PAD_GPIO_7__GPIO1_IO07 | MUX_PAD_CTRL(NO_PAD_CTRL),			/* USB reset_n */
+	MX6_PAD_GPIO_8__GPIO1_IO08 | MUX_PAD_CTRL(NO_PAD_CTRL),			/* CDCM6208 reset_n */
+	MX6_PAD_SD1_CMD__GPIO1_IO18 | MUX_PAD_CTRL(NO_PAD_CTRL),		/* ADV7604 reset_n */
+	MX6_PAD_SD1_CLK__GPIO1_IO20 | MUX_PAD_CTRL(NO_PAD_CTRL),		/* ADV7611 reset_n */
+	MX6_PAD_SD1_DAT2__GPIO1_IO19 | MUX_PAD_CTRL(NO_PAD_CTRL),		/* ADV7604 powerdown_n */
+	MX6_PAD_GPIO_9__GPIO1_IO09 | MUX_PAD_CTRL(NO_PAD_CTRL),			/* FPGA reset_n */
 };
 
 #define PC MUX_PAD_CTRL(I2C_PAD_CTRL)
@@ -122,63 +124,16 @@ struct i2c_pads_info i2c_pad_info1 = {
 	}
 };
 
-
-#ifdef CONFIG_IMX_ECSPI
-s32 spi_get_cfg(struct imx_spi_dev_t *dev)
-{
-	switch (dev->slave.cs)
-	{
-		case 0:
-			/* CDCM6208 */
-			dev->base = ECSPI3_BASE_ADDR;
-			dev->freq = 2500000;
-			dev->ss_pol = IMX_SPI_ACTIVE_LOW;
-			dev->ss = 0;
-			dev->fifo_sz = 64 * 4;
-			dev->us_delay = 0;
-			break;
-		default:
-			printf("Invalid Bus ID!\n");
-	}
-
-	return 0;
-}
-
-void spi_io_init(struct imx_spi_dev_t *dev)
-{
-	u32 reg;
-
-	switch (dev->base)
-	{
-		case ECSPI3_BASE_ADDR:
-			/* Enable clock */
-			reg = readl(CCM_BASE_ADDR + CLKCTL_CCGR1);
-			reg |= (0x3 << 4);
-			writel(reg, CCM_BASE_ADDR + CLKCTL_CCGR1);
-
-			/* SCLK */
-			imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT0__ECSPI3_SCLK);
-
-			/* MISO */
-			imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT2__ECSPI3_MISO);
-
-			/* MOSI */
-			imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT1__ECSPI3_MOSI);
-
-			/* SS0 */
-			imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT3__ECSPI3_SS0);
-			break;
-		default:
-			break;
-	}
-}
-#endif
-
 struct spi_slave *cdcm8208_spi_slave = (struct spi_slave *)NULL;
+
+struct mxc_ccm_reg *mxc_ccm = (struct mxc_ccm_reg *)CCM_BASE_ADDR;
 
 static void setup_spi(void)
 {
+	puts("Setup SPI...\n");
 	imx_iomux_v3_setup_multiple_pads(ecspi3_pads, ARRAY_SIZE(ecspi3_pads));
+	/* Enable clock */
+	setbits_le32(&mxc_ccm->CCGR1, MXC_CCM_CCGR1_ECSPI3S_MASK << MXC_CCM_CCGR1_ECSPI3S_OFFSET);
 }
 
 static void setup_iomux_uart(void)
@@ -201,7 +156,9 @@ iomux_v3_cfg_t enet_pads[] =
 	MX6_PAD_ENET_RX_ER__ENET_RX_ER		| MUX_PAD_CTRL(ENET_PAD_CTRL),
 	MX6_PAD_ENET_RXD0__ENET_RX_DATA0		| MUX_PAD_CTRL(ENET_PAD_CTRL),
 	MX6_PAD_ENET_RXD1__ENET_RX_DATA1		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+
 	MX6_PAD_GPIO_16__ENET_REF_CLK		| MUX_PAD_CTRL(ENET_PAD_CTRL),
+
 	MX6_PAD_GPIO_4__GPIO1_IO04		| MUX_PAD_CTRL(NO_PAD_CTRL), /* Reset */
 };
 
@@ -441,14 +398,61 @@ static const struct boot_mode board_boot_modes[] = {
 };
 #endif
 
+#define CDCM6208_CMD_READ	2
+
+static int cdcm6208_read(struct spi_slave *spi, u8 reg, u8 *val)
+{
+	unsigned long flags = SPI_XFER_BEGIN;
+	int ret;
+	int cmd_len;
+	u8 cmd[2];
+	int i;
+
+	cmd[0] = CDCM6208_CMD_READ;
+	cmd[1] = reg;
+	cmd_len = 2;
+
+	// CSPI SS1, SS2 & SS3 must be high to avoid bus conflicts
+	gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 29), 1);
+
+	ret = spi_xfer(spi, cmd_len * 8, cmd, NULL, flags);
+	if (ret) {
+		printf("Failed to send command (%zu bytes): %d\n",
+				cmd_len, ret);
+		return -EINVAL;
+	}
+	flags |= SPI_XFER_END;
+	*val = 0;
+	cmd_len = 1;
+	ret = spi_xfer(spi, cmd_len * 8, NULL, val, flags);
+	if (ret) {
+		printf("Failed to read (%zu bytes): %d\n",
+				cmd_len, ret);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 int board_late_init(void)
 {
 	puts("Entering late board init...\n");
 
 #ifdef CONFIG_IMX_SPI_CDCM6208
+
 	puts("Probing CDCM6208...\n");
 	if (cdcm8208_spi_slave = spi_cdcm6208_probe()) {
-		show_cdcm6208_info(cdcm8208_spi_slave);
+		puts("Claiming SPI bus... ");
+		if (!spi_claim_bus(cdcm8208_spi_slave)) {
+			puts("OK !\n");
+			volatile u32 rev_id;
+			rev_id = cdcm6208_read(cdcm8208_spi_slave, 40, 0);
+			printf("CDCM6208: Version = %s, Revision = %s\n", ((rev_id >> 3) & 0x7) ? "CDCM6208V2" : "CDCM6208V1", ((rev_id & 0x7) == 2) ? "Production" : "Engineering");
+		} else {
+			puts("Failed !\n");
+		}
 	}
 #endif
 

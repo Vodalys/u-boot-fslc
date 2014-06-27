@@ -25,25 +25,6 @@ u32 cdcm6208_reg(struct spi_slave *slave, u32 reg, u32 val, u32 write)
 	{
 		return -1;
 	}
-	
-	#if defined CONFIG_MX6Q
-
-	// CSPI SS1, SS2 & SS3 must be high to avoid bus conflicts
-	imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT4__ECSPI3_SS1);
-	imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT7__GPIO4_IO28);
-	imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT8__GPIO4_IO29);
-
-	#elif defined CONFIG_MX6DL
-
-	// CSPI SS1, SS2 & SS3 must be high to avoid bus conflicts
-	imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT4__ECSPI3_SS1);
-	imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT7__GPIO4_IO28);
-	imx_iomux_v3_setup_pad(MX6_PAD_DISP0_DAT8__GPIO4_IO29);
-
-	#endif
-	
-	writel(1<<25 | 1<<28 | 1<<29, GPIO4_BASE_ADDR + 0x4);
-	writel(1<<25 | 1<<28 | 1<<29, GPIO4_BASE_ADDR + 0x0);
 
 	// Check register value for write access
 	if (reg > 20 && write == 1) 
@@ -62,6 +43,7 @@ u32 cdcm6208_reg(struct spi_slave *slave, u32 reg, u32 val, u32 write)
 	cdcm6208_tx = (!write << 31) | (reg << 16) | (val & 0xFFFF);
 
 	// Initiate SPI transfer
+	printf("Initiate SPI transfer cmd=%X\n", cdcm6208_tx);
 	if (spi_xfer(slave, 4 << 3, (u8 *)&cdcm6208_tx, (u8 *)&cdcm6208_rx, SPI_XFER_BEGIN | SPI_XFER_END))
 	{
 		return -1;
@@ -69,12 +51,12 @@ u32 cdcm6208_reg(struct spi_slave *slave, u32 reg, u32 val, u32 write)
 
 	if (write) 
 	{
-		//printf("cdcm6208_reg : Write 0x%04x @ 0x%x\n", cdcm6208_tx & 0xFFFF, reg);
+		printf("cdcm6208_reg : Write 0x%04x @ 0x%x\n", cdcm6208_tx & 0xFFFF, reg);
 		return 0;
 	}
 	else
 	{
-		//printf("cdcm6208_reg : Read 0x%04x @ 0x%x\n", cdcm6208_rx & 0xFFFF, reg);
+		printf("cdcm6208_reg : Read 0x%04x @ 0x%x\n", cdcm6208_rx & 0xFFFF, reg);
 		return (cdcm6208_rx & 0xFFFF);
 	}
 }

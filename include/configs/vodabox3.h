@@ -122,6 +122,7 @@
 #undef CONFIG_BOOTDELAY
 #define CONFIG_BOOTDELAY	       3
 
+#undef CONFIG_LOADADDR
 #define CONFIG_LOADADDR		0x10800000	/* loadaddr env var */
 #define CONFIG_RD_LOADADDR	(0x1300000)
 
@@ -156,8 +157,10 @@
 #define CONFIG_FEC_MXC
 #define CONFIG_MII
 #define IMX_FEC_BASE			ENET_BASE_ADDR
+#undef CONFIG_FEC_XCV_TYPE
 #define CONFIG_FEC_XCV_TYPE		RMII
 #define CONFIG_ETHPRIME			"FEC"
+#undef CONFIG_FEC_MXC_PHYADDR
 #define CONFIG_FEC_MXC_PHYADDR		0
 
 #define CONFIG_PHYLIB
@@ -181,33 +184,20 @@
 
 /* Monitor at beginning of flash */
 #define CONFIG_FSL_ENV_IN_MMC
-/* #define CONFIG_FSL_ENV_IN_NAND */
-/* #define CONFIG_FSL_ENV_IN_SATA */
 
-#define CONFIG_ENV_SECT_SIZE    (8 * 1024)
-#define CONFIG_ENV_SIZE         CONFIG_ENV_SECT_SIZE
+//#define CONFIG_ENV_SECT_SIZE    (8 * 1024)
+//#define CONFIG_ENV_SIZE         CONFIG_ENV_SECT_SIZE
 
-#if defined(CONFIG_FSL_ENV_IN_NAND)
-	#define CONFIG_ENV_IS_IN_NAND 1
-	#define CONFIG_ENV_OFFSET	0x100000
-#elif defined(CONFIG_FSL_ENV_IN_MMC)
-	#define CONFIG_ENV_IS_IN_MMC	1
+#if defined(CONFIG_FSL_ENV_IN_MMC)
+	#define CONFIG_ENV_IS_IN_MMC
+	#undef CONFIG_ENV_OFFSET
 	#define CONFIG_ENV_OFFSET	(768 * 1024)
-#elif defined(CONFIG_FSL_ENV_IN_SATA)
-	#define CONFIG_ENV_IS_IN_SATA   1
-	#define CONFIG_SATA_ENV_DEV     0
-	#define CONFIG_ENV_OFFSET       (768 * 1024)
-#elif defined(CONFIG_FSL_ENV_IN_SF)
-	#define CONFIG_ENV_IS_IN_SPI_FLASH	1
-	#define CONFIG_ENV_SPI_CS		1
-	#define CONFIG_ENV_OFFSET       (768 * 1024)
 #else
 	#define CONFIG_ENV_IS_NOWHERE	1
 #endif
 
-
-#define CONFIG_MXC_SPI
 #if 0
+#define	CONFIG_MXC_ECSPI
 /* CDCM6208 */
 #define	CONFIG_IMX_SPI_CDCM6208
 #define	CONFIG_IMX_SPI_CDCM6208_BUS	2
