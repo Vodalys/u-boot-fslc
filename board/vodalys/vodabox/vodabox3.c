@@ -29,10 +29,6 @@
 #include <i2c.h>
 #include <spi.h>
 
-#ifdef CONFIG_IMX_SPI_CDCM6208
-#include "common/cdcm6208.h"
-#endif
-
 DECLARE_GLOBAL_DATA_PTR;
 
 #define UART_PAD_CTRL  (PAD_CTL_PUS_100K_UP |			\
@@ -126,14 +122,17 @@ struct i2c_pads_info i2c_pad_info1 = {
 
 struct spi_slave *cdcm8208_spi_slave = (struct spi_slave *)NULL;
 
-struct mxc_ccm_reg *mxc_ccm = (struct mxc_ccm_reg *)CCM_BASE_ADDR;
-
 static void setup_spi(void)
 {
+	int reg = 0;
+	struct mxc_ccm_reg *mxc_ccm = (struct mxc_ccm_reg *)CCM_BASE_ADDR;
+
 	puts("Setup SPI...\n");
 	imx_iomux_v3_setup_multiple_pads(ecspi3_pads, ARRAY_SIZE(ecspi3_pads));
-	/* Enable clock */
-	setbits_le32(&mxc_ccm->CCGR1, MXC_CCM_CCGR1_ECSPI3S_MASK << MXC_CCM_CCGR1_ECSPI3S_OFFSET);
+	/* Enable clock of ecspi3 */
+	reg = readl(&mxc_ccm->CCGR1);
+	reg |= MXC_CCM_CCGR1_ECSPI3S_MASK;
+	writel(reg, &mxc_ccm->CCGR1);
 }
 
 static void setup_iomux_uart(void)
@@ -398,43 +397,146 @@ static const struct boot_mode board_boot_modes[] = {
 };
 #endif
 
-#define CDCM6208_CMD_READ	2
-
-static int cdcm6208_read(struct spi_slave *spi, u8 reg, u8 *val)
+#ifdef CONFIG_IMX_SPI_CDCM6208
+typedef struct
 {
-	unsigned long flags = SPI_XFER_BEGIN;
-	int ret;
-	int cmd_len;
-	u8 cmd[2];
-	int i;
+	unsigned short reg;
+	unsigned short value;
+} CDCM6208_T_CFG;
 
-	cmd[0] = CDCM6208_CMD_READ;
-	cmd[1] = reg;
-	cmd_len = 2;
+CDCM6208_T_CFG cdmc6208Config [] =
+{
+	{0, 0x0079},
+	{1, 0x0004},
+	{2, 0x0036},
+	{3, 0x00F0},
+	{4, 0x00EF},
+	{5, 0x0133},
+	{6, 0x0004},
+	{7, 0x0199},
+	{8, 0x0004},
+	{9, 0x4253},
+	{10, 0x00DD},
+	{11, 0x9800},
+	{12, 0x0253},
+	{13, 0x00DD},
+	{14, 0x9A00},
+	{15, 0x0259},
+	{16, 0x00CC},
+	{17, 0x0000},
+	{18, 0x0243},
+	{19, 0x0066},
+	{20, 0xCD00},
+};
+
+static int cdcm6208_read(struct spi_slave *slave, u8 reg, u8 val)
+{
+	static int cdcm6208_tx, cdcm6208_rx;
+
+	// Check register value for read access
+	if (reg > 21 && reg != 40)
+	{
+		printf("<reg num> = %d is invalide. Should be less then 22 or equal to 40\n", reg);
+		return -1;
+	}
 
 	// CSPI SS1, SS2 & SS3 must be high to avoid bus conflicts
 	gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 29), 1);
 
-	ret = spi_xfer(spi, cmd_len * 8, cmd, NULL, flags);
-	if (ret) {
-		printf("Failed to send command (%zu bytes): %d\n",
-				cmd_len, ret);
-		return -EINVAL;
+	cdcm6208_tx = (1 << 31) | (reg << 16) | (val & 0xFFFF);
+
+	// Initiate SPI transfer
+	debug("Initiate SPI transfer cmd=%X\n", cdcm6208_tx);
+	if (spi_xfer(slave, 4 << 3, (u8 *)&cdcm6208_tx, (u8 *)&cdcm6208_rx, SPI_XFER_BEGIN | SPI_XFER_END))
+	{
+		return -1;
 	}
-	flags |= SPI_XFER_END;
-	*val = 0;
-	cmd_len = 1;
-	ret = spi_xfer(spi, cmd_len * 8, NULL, val, flags);
-	if (ret) {
-		printf("Failed to read (%zu bytes): %d\n",
-				cmd_len, ret);
-		return -EINVAL;
+
+	printf("cdcm6208_reg : Read 0x%04x @ 0x%x\n", cdcm6208_rx & 0xFFFF, reg);
+	return (cdcm6208_rx & 0xFFFF);
+}
+
+static int cdcm6208_write(struct spi_slave *slave, u8 reg, u8 val)
+{
+	static int cdcm6208_tx, cdcm6208_rx;
+
+	// Check register value for write access
+	if (reg > 20)
+	{
+		printf("<reg num> = %d is invalide. Should be less then 21\n", reg);
+		return -1;
+	}
+
+	// CSPI SS1, SS2 & SS3 must be high to avoid bus conflicts
+	gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 29), 1);
+
+	cdcm6208_tx = (0 << 31) | (reg << 16) | (val & 0xFFFF);
+
+	// Initiate SPI transfer
+	debug("Initiate SPI transfer cmd=%X\n", cdcm6208_tx);
+	if (spi_xfer(slave, 4 << 3, (u8 *)&cdcm6208_tx, (u8 *)&cdcm6208_rx, SPI_XFER_BEGIN | SPI_XFER_END))
+	{
+		return -1;
+	}
+
+	printf("cdcm6208_reg : Write 0x%04x @ 0x%x\n", cdcm6208_tx & 0xFFFF, reg);
+	return 0;
+}
+
+
+int cdcm6208_config (struct spi_slave *slave)
+{
+	unsigned int index;
+
+	for (index = 0; index < sizeof (cdmc6208Config) / sizeof (*cdmc6208Config);index ++)
+	{
+		if (cdcm6208_write(slave, cdmc6208Config[index].reg, cdmc6208Config[index].value))
+		{
+			return -1;
+		}
 	}
 
 	return 0;
 }
+
+int cdcm6208_calibrate (struct spi_slave *slave)
+{
+	unsigned int cpt = 1000;
+	// Toggle reset_n pin
+	gpio_direction_output(IMX_GPIO_NR(1, 8), 1);
+	udelay(1000);
+	gpio_direction_output(IMX_GPIO_NR(1, 8), 0);
+
+	// Check if PLL is locked
+	while (cpt --)
+	{
+		if (!((cdcm6208_read(slave, 21, 0) >> 1) & 0x3))
+		{
+			return 0;
+		}
+
+		udelay (1000);
+	}
+
+	return -1;
+}
+
+struct spi_slave *spi_cdcm6208_probe(void)
+{
+	return spi_setup_slave(CONFIG_IMX_SPI_CDCM6208_BUS, CONFIG_IMX_SPI_CDCM6208_CS, 2500000, 0);
+}
+
+void spi_cdcm6208_free(struct spi_slave *slave)
+{
+	if (slave)
+		spi_free_slave(slave);
+}
+
+#endif
 
 int board_late_init(void)
 {
@@ -450,7 +552,20 @@ int board_late_init(void)
 			volatile u32 rev_id;
 			rev_id = cdcm6208_read(cdcm8208_spi_slave, 40, 0);
 			printf("CDCM6208: Version = %s, Revision = %s\n", ((rev_id >> 3) & 0x7) ? "CDCM6208V2" : "CDCM6208V1", ((rev_id & 0x7) == 2) ? "Production" : "Engineering");
-		} else {
+
+			if (cdcm6208_config(cdcm8208_spi_slave)) {
+				printf ("Error during configuring CDCM6208\n");
+			}
+			else {
+				if (cdcm6208_calibrate(cdcm8208_spi_slave))	{
+					printf ("Timeout during CDCM6208 PLL locking, PLL is not locked\n");
+				}
+				else {
+					printf ("CDCM6208 configured\n");
+				}
+			}
+		}
+		else {
 			puts("Failed !\n");
 		}
 	}
