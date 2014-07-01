@@ -88,10 +88,10 @@ iomux_v3_cfg_t const ecspi3_pads[] = {
 	MX6_PAD_DISP0_DAT0__ECSPI3_SCLK | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_DISP0_DAT1__ECSPI3_MOSI | MUX_PAD_CTRL(SPI_PAD_CTRL),
 	MX6_PAD_DISP0_DAT2__ECSPI3_MISO | MUX_PAD_CTRL(SPI_PAD_CTRL),
-/*	MX6_PAD_DISP0_DAT3__ECSPI3_SS0	| MUX_PAD_CTRL(SPI_PAD_CTRL),
+	MX6_PAD_DISP0_DAT3__GPIO4_IO24	| MUX_PAD_CTRL(NO_PAD_CTRL),
 	MX6_PAD_DISP0_DAT4__GPIO4_IO25	| MUX_PAD_CTRL(NO_PAD_CTRL),
 	MX6_PAD_DISP0_DAT7__GPIO4_IO28	| MUX_PAD_CTRL(NO_PAD_CTRL),
-	MX6_PAD_DISP0_DAT8__GPIO4_IO29	| MUX_PAD_CTRL(NO_PAD_CTRL),*/
+	MX6_PAD_DISP0_DAT8__GPIO4_IO29	| MUX_PAD_CTRL(NO_PAD_CTRL),
 };
 
 iomux_v3_cfg_t const extra_pads[] = {
@@ -429,10 +429,10 @@ CDCM6208_T_CFG cdmc6208Config [] =
 	{20, 0xCD00},
 };
 
+static u32 cdcm6208_tx, cdcm6208_rx;
+
 static int cdcm6208_read(struct spi_slave *slave, u8 reg, u8 val)
 {
-	static int cdcm6208_tx, cdcm6208_rx;
-
 	// Check register value for read access
 	if (reg > 21 && reg != 40)
 	{
@@ -444,24 +444,22 @@ static int cdcm6208_read(struct spi_slave *slave, u8 reg, u8 val)
 	gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 29), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 24), 0);
 
-	cdcm6208_tx = (1 << 31) | (reg << 16) | (val & 0xFFFF);
+	cdcm6208_tx = ntohl((1 << 31) | (reg << 16) | (val & 0xFFFF));
 
 	// Initiate SPI transfer
-	debug("Initiate SPI transfer cmd=%X\n", cdcm6208_tx);
-	if (spi_xfer(slave, 4 << 3, (u8 *)&cdcm6208_tx, (u8 *)&cdcm6208_rx, SPI_XFER_BEGIN | SPI_XFER_END))
+	if (spi_xfer(slave, 32, (u8 *)&cdcm6208_tx, (u8 *)&cdcm6208_rx, SPI_XFER_BEGIN | SPI_XFER_END))
 	{
 		return -1;
 	}
 
-	printf("cdcm6208_reg : Read 0x%04x @ 0x%x\n", cdcm6208_rx & 0xFFFF, reg);
-	return (cdcm6208_rx & 0xFFFF);
+	printf("cdcm6208_reg : Read 0x%04x @ 0x%x\n", htonl(cdcm6208_rx), reg);
+	return (htonl(cdcm6208_rx) & 0xFFFF);
 }
 
 static int cdcm6208_write(struct spi_slave *slave, u8 reg, u8 val)
 {
-	static int cdcm6208_tx, cdcm6208_rx;
-
 	// Check register value for write access
 	if (reg > 20)
 	{
@@ -473,8 +471,9 @@ static int cdcm6208_write(struct spi_slave *slave, u8 reg, u8 val)
 	gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 29), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 24), 0);
 
-	cdcm6208_tx = (0 << 31) | (reg << 16) | (val & 0xFFFF);
+	cdcm6208_tx = ntohl((0 << 31) | (reg << 16) | (val & 0xFFFF));
 
 	// Initiate SPI transfer
 	debug("Initiate SPI transfer cmd=%X\n", cdcm6208_tx);
@@ -483,7 +482,7 @@ static int cdcm6208_write(struct spi_slave *slave, u8 reg, u8 val)
 		return -1;
 	}
 
-	printf("cdcm6208_reg : Write 0x%04x @ 0x%x\n", cdcm6208_tx & 0xFFFF, reg);
+	printf("cdcm6208_reg : Write 0x%04x @ 0x%x\n", htonl(cdcm6208_tx) & 0xFFFF, reg);
 	return 0;
 }
 
@@ -543,14 +542,21 @@ int board_late_init(void)
 	puts("Entering late board init...\n");
 
 #ifdef CONFIG_IMX_SPI_CDCM6208
-
+	int i;
 	puts("Probing CDCM6208...\n");
+	gpio_direction_output(IMX_GPIO_NR(4, 24), 0);
+
 	if (cdcm8208_spi_slave = spi_cdcm6208_probe()) {
 		puts("Claiming SPI bus... ");
 		if (!spi_claim_bus(cdcm8208_spi_slave)) {
 			puts("OK !\n");
 			volatile u32 rev_id;
+			gpio_direction_output(IMX_GPIO_NR(4, 24), 1);
+			udelay(1000);
+			gpio_direction_output(IMX_GPIO_NR(4, 24), 0);
+
 			rev_id = cdcm6208_read(cdcm8208_spi_slave, 40, 0);
+
 			printf("CDCM6208: Version = %s, Revision = %s\n", ((rev_id >> 3) & 0x7) ? "CDCM6208V2" : "CDCM6208V1", ((rev_id & 0x7) == 2) ? "Production" : "Engineering");
 
 			if (cdcm6208_config(cdcm8208_spi_slave)) {
