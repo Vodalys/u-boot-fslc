@@ -410,7 +410,7 @@ CDCM6208_T_CFG cdmc6208Config [] =
 	{1, 0x0004},
 	{2, 0x0036},
 	{3, 0x00F0},
-	{4, 0x00EF},
+	{4, 0x30EB},/* 0x00EF */
 	{5, 0x0133},
 	{6, 0x0004},
 	{7, 0x0199},
@@ -431,47 +431,61 @@ CDCM6208_T_CFG cdmc6208Config [] =
 
 static u32 cdcm6208_tx, cdcm6208_rx;
 
-static int cdcm6208_read(struct spi_slave *slave, u8 reg, u8 val)
+static int cdcm6208_read(struct spi_slave *slave, u8 reg, u16 val)
 {
+	int ret = 0;
 	// Check register value for read access
 	if (reg > 21 && reg != 40)
 	{
 		printf("<reg num> = %d is invalide. Should be less then 22 or equal to 40\n", reg);
-		return -1;
+		ret = -1;
+		goto finish;
 	}
 
 	// CSPI SS1, SS2 & SS3 must be high to avoid bus conflicts
 	gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 29), 1);
+
+	// SS0 needs to be up and down between each read / write
 	gpio_direction_output(IMX_GPIO_NR(4, 24), 0);
 
 	cdcm6208_tx = ntohl((1 << 31) | (reg << 16) | (val & 0xFFFF));
 
 	// Initiate SPI transfer
-	if (spi_xfer(slave, 32, (u8 *)&cdcm6208_tx, (u8 *)&cdcm6208_rx, SPI_XFER_BEGIN | SPI_XFER_END))
+	if (spi_xfer(slave, 4 << 3, (u8 *)&cdcm6208_tx, (u8 *)&cdcm6208_rx, SPI_XFER_BEGIN | SPI_XFER_END))
 	{
-		return -1;
+		ret = -1;
+		debug("cdcm6208_reg : Read failed 0x%x @ 0x%x\n", ntohl(cdcm6208_rx), reg);
+		goto finish;
 	}
+	ret = (htonl(cdcm6208_rx) & 0xFFFF);
+	debug("cdcm6208_reg : Read 0x%x @ 0x%x\n", ntohl(cdcm6208_rx), reg);
 
-	printf("cdcm6208_reg : Read 0x%04x @ 0x%x\n", htonl(cdcm6208_rx), reg);
-	return (htonl(cdcm6208_rx) & 0xFFFF);
+finish:
+	gpio_direction_output(IMX_GPIO_NR(4, 24), 1);
+	return ret;
 }
 
-static int cdcm6208_write(struct spi_slave *slave, u8 reg, u8 val)
+static int cdcm6208_write(struct spi_slave *slave, u8 reg, u16 val)
 {
+	int ret = 0;
 	// Check register value for write access
 	if (reg > 20)
 	{
 		printf("<reg num> = %d is invalide. Should be less then 21\n", reg);
-		return -1;
+		ret = -1;
+		goto finish;
 	}
 
 	// CSPI SS1, SS2 & SS3 must be high to avoid bus conflicts
 	gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
 	gpio_direction_output(IMX_GPIO_NR(4, 29), 1);
+
+	// SS0 needs to be up and down between each read / write
 	gpio_direction_output(IMX_GPIO_NR(4, 24), 0);
+
 
 	cdcm6208_tx = ntohl((0 << 31) | (reg << 16) | (val & 0xFFFF));
 
@@ -479,22 +493,52 @@ static int cdcm6208_write(struct spi_slave *slave, u8 reg, u8 val)
 	debug("Initiate SPI transfer cmd=%X\n", cdcm6208_tx);
 	if (spi_xfer(slave, 4 << 3, (u8 *)&cdcm6208_tx, (u8 *)&cdcm6208_rx, SPI_XFER_BEGIN | SPI_XFER_END))
 	{
-		return -1;
+		debug("cdcm6208_reg : Write failed 0x%x @ 0x%x\n", ntohl(cdcm6208_tx) & 0xFFFF, reg);
+		ret = -1;
+		goto finish;
 	}
 
-	printf("cdcm6208_reg : Write 0x%04x @ 0x%x\n", htonl(cdcm6208_tx) & 0xFFFF, reg);
-	return 0;
+	debug("cdcm6208_reg : Write 0x%x @ 0x%x\n", ntohl(cdcm6208_tx) & 0xFFFF, reg);
+
+finish:
+	gpio_direction_output(IMX_GPIO_NR(4, 24), 1);
+	return ret;
 }
 
 
 int cdcm6208_config (struct spi_slave *slave)
 {
 	unsigned int index;
+	u32 reg = 0;
 
 	for (index = 0; index < sizeof (cdmc6208Config) / sizeof (*cdmc6208Config);index ++)
 	{
 		if (cdcm6208_write(slave, cdmc6208Config[index].reg, cdmc6208Config[index].value))
 		{
+			return -1;
+		} else {
+			/* Write seems ok, re-read it */
+			reg = cdcm6208_read(slave, cdmc6208Config[index].reg, 0);
+			if (reg != cdmc6208Config[index].value) {
+				printf("Read 0x%x instead of 0x%x\n", reg, cdmc6208Config[index].value);
+				return -1;
+			}
+		}
+	}
+
+	return 0;
+}
+
+static int cdcm6208_read_config (struct spi_slave *slave)
+{
+	unsigned int index;
+	u32 reg = 0;
+
+	for (index = 0; index < sizeof (cdmc6208Config) / sizeof (*cdmc6208Config);index ++)
+	{
+		reg = cdcm6208_read(slave, cdmc6208Config[index].reg, 0);
+		if (reg != cdmc6208Config[index].value) {
+			printf("Read 0x%x instead of 0x%x\n", reg, cdmc6208Config[index].value);
 			return -1;
 		}
 	}
@@ -502,13 +546,28 @@ int cdcm6208_config (struct spi_slave *slave)
 	return 0;
 }
 
-int cdcm6208_calibrate (struct spi_slave *slave)
+static int cdcm6208_reset(void)
 {
-	unsigned int cpt = 1000;
-	// Toggle reset_n pin
+	puts("Reset CDCM6208...\n");
+	gpio_direction_output(IMX_GPIO_NR(1, 8), 0);
+	udelay(1000);
 	gpio_direction_output(IMX_GPIO_NR(1, 8), 1);
 	udelay(1000);
-	gpio_direction_output(IMX_GPIO_NR(1, 8), 0);
+	return 0;
+}
+
+int cdcm6208_calibrate (struct spi_slave *slave)
+{
+	unsigned int cpt = 100;
+	// Toggle reset_n pin
+	cdcm6208_reset();
+
+	puts("Checking register configuration... ");
+	if (cdcm6208_read_config(slave) != 0) {
+		puts("KO !\n");
+		return -1;
+	}
+	puts("OK !\n");
 
 	// Check if PLL is locked
 	while (cpt --)
@@ -518,7 +577,7 @@ int cdcm6208_calibrate (struct spi_slave *slave)
 			return 0;
 		}
 
-		udelay (1000);
+		udelay (10000);
 	}
 
 	return -1;
@@ -550,11 +609,8 @@ int board_late_init(void)
 		puts("Claiming SPI bus... ");
 		if (!spi_claim_bus(cdcm8208_spi_slave)) {
 			puts("OK !\n");
+			cdcm6208_reset();
 			volatile u32 rev_id;
-			gpio_direction_output(IMX_GPIO_NR(4, 24), 1);
-			udelay(1000);
-			gpio_direction_output(IMX_GPIO_NR(4, 24), 0);
-
 			rev_id = cdcm6208_read(cdcm8208_spi_slave, 40, 0);
 
 			printf("CDCM6208: Version = %s, Revision = %s\n", ((rev_id >> 3) & 0x7) ? "CDCM6208V2" : "CDCM6208V1", ((rev_id & 0x7) == 2) ? "Production" : "Engineering");
