@@ -99,7 +99,8 @@
 #endif
 
 /* Framebuffer */
-/*#define CONFIG_VIDEO
+#if 0
+#define CONFIG_VIDEO
 #define CONFIG_VIDEO_IPUV3
 #define CONFIG_CFB_CONSOLE
 #define CONFIG_VGA_AS_SINGLE_DEVICE
@@ -113,7 +114,8 @@
 #define CONFIG_VIDEO_BMP_LOGO
 #define CONFIG_IPUV3_CLK 260000000
 #define CONFIG_IMX_HDMI
-*/
+#endif
+
 /* Command definition */
 #include <config_cmd_default.h>
 
