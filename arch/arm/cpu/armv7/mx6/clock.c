@@ -464,6 +464,7 @@ static void ungate_sata_clock(void)
 	/* Enable SATA clock. */
 	setbits_le32(&imx_ccm->CCGR5, MXC_CCM_CCGR5_SATA_MASK);
 }
+#endif
 
 static void ungate_pcie_clock(void)
 {
@@ -474,11 +475,13 @@ static void ungate_pcie_clock(void)
 	setbits_le32(&imx_ccm->CCGR4, MXC_CCM_CCGR4_PCIE_MASK);
 }
 
+#ifndef CONFIG_MX6SX
 int enable_sata_clock(void)
 {
 	ungate_sata_clock();
 	return enable_enet_pll(BM_ANADIG_PLL_ENET_ENABLE_SATA);
 }
+#endif
 
 int enable_pcie_clock(void)
 {
@@ -510,7 +513,9 @@ int enable_pcie_clock(void)
 	clrbits_le32(&ccm_regs->cbcmr, MXC_CCM_CBCMR_PCIE_AXI_CLK_SEL);
 
 	/* Party time! Ungate the clock to the PCIe. */
+#ifndef CONFIG_MX6SX
 	ungate_sata_clock();
+#endif
 	ungate_pcie_clock();
 
 	return enable_enet_pll(BM_ANADIG_PLL_ENET_ENABLE_SATA |
