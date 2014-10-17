@@ -198,6 +198,9 @@
 	#define CONFIG_ENV_IS_NOWHERE	1
 #endif
 
+#define CONFIG_CMD_FS_GENERIC
+#define CONFIG_CMD_EXT2
+#define CONFIG_CMD_EXT4
 
 #define CONFIG_CMD_SPI
 #define	CONFIG_MXC_ECSPI
