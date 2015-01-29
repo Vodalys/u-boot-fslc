@@ -268,6 +268,39 @@ struct fsl_esdhc_cfg usdhc_cfg[] = {
 
 #define USDHC3_CD_GPIO	IMX_GPIO_NR(1, 16)
 
+#define	BOOT_DEVICE_SATA	2
+#define	BOOT_DEVICE_SD		1
+#define	BOOT_DEVICE_EMMC	0
+
+static int get_mmc_env_dev(void) {
+	struct src *psrc = (struct src *)SRC_BASE_ADDR;
+	unsigned reg = readl(&psrc->sbmr1);
+	int ret = 0;
+
+	/* BOOT_CFG1[7:4] - see IMX6DQRM Table 8-8 */
+	switch ((reg & 0x000000FF) >> 4) {
+		case 0x2:
+			printf("Boot on SATA\n");
+			ret = BOOT_DEVICE_SATA;
+			break;
+		case 0x4:
+		case 0x5:
+			printf("Boot on SD\n");
+			ret = BOOT_DEVICE_SD;
+			break;
+		case 0x6:
+		case 0x7:
+			printf("Boot on eMMC\n");
+			ret = BOOT_DEVICE_EMMC;
+			break;
+		default:
+			printf("Could not get boot device\n");
+			break;
+
+	}
+	return ret;
+}
+
 int board_mmc_getcd(struct mmc *mmc)
 {
 	struct fsl_esdhc_cfg *cfg = (struct fsl_esdhc_cfg *)mmc->priv;
@@ -288,38 +321,30 @@ int board_mmc_getcd(struct mmc *mmc)
 int board_mmc_init(bd_t *bis)
 {
 	s32 status = 0;
-	int i;
+	int boot_dev = get_mmc_env_dev();
 
-	/*
-	 * According to the board_mmc_init() the following map is done:
-	 * (U-boot device node)    (Physical Port)
-	 * mmc0                    SD3
-	 * mmc1                    SD4
-	 */
-
-	for (i = 0; i < CONFIG_SYS_FSL_USDHC_NUM; i++) {
-		switch (i) {
-		case 0:
-			imx_iomux_v3_setup_multiple_pads(
-				usdhc3_pads, ARRAY_SIZE(usdhc3_pads));
-			usdhc_cfg[0].sdhc_clk = mxc_get_clock(MXC_ESDHC3_CLK);
-			usdhc_cfg[0].max_bus_width = 4;
-			break;
-		case 1:
-			imx_iomux_v3_setup_multiple_pads(
-				usdhc4_pads, ARRAY_SIZE(usdhc4_pads));
-			usdhc_cfg[1].sdhc_clk = mxc_get_clock(MXC_ESDHC4_CLK);
-			usdhc_cfg[1].max_bus_width = 8;
-			break;
-		default:
-			printf("Warning: you configured more USDHC controllers"
-			       "(%d) than supported by the board (%d)\n",
-			       i + 1, CONFIG_SYS_FSL_USDHC_NUM);
-			return status;
-		}
-
-		status |= fsl_esdhc_initialize(bis, &usdhc_cfg[i]);
-
+	imx_iomux_v3_setup_multiple_pads(
+		usdhc3_pads, ARRAY_SIZE(usdhc3_pads));
+	imx_iomux_v3_setup_multiple_pads(
+		usdhc4_pads, ARRAY_SIZE(usdhc4_pads));
+	if (boot_dev == BOOT_DEVICE_EMMC) {
+		usdhc_cfg[0].sdhc_clk = mxc_get_clock(MXC_ESDHC4_CLK);
+		usdhc_cfg[0].max_bus_width = 8;
+		usdhc_cfg[1].sdhc_clk = mxc_get_clock(MXC_ESDHC3_CLK);
+		usdhc_cfg[1].max_bus_width = 4;
+		status = fsl_esdhc_initialize(bis, &usdhc_cfg[1]);
+		status |= fsl_esdhc_initialize(bis, &usdhc_cfg[0]);
+		printf("eMMC as dev 0\n");
+	} else if (boot_dev == BOOT_DEVICE_SD) {
+		usdhc_cfg[0].sdhc_clk = mxc_get_clock(MXC_ESDHC3_CLK);
+		usdhc_cfg[0].max_bus_width = 4;
+		usdhc_cfg[1].sdhc_clk = mxc_get_clock(MXC_ESDHC4_CLK);
+		usdhc_cfg[1].max_bus_width = 8;
+		status = fsl_esdhc_initialize(bis, &usdhc_cfg[0]);
+		status |= fsl_esdhc_initialize(bis, &usdhc_cfg[1]);
+		printf("SD as dev 0\n");
+	} else {
+		printf("SATA device cannot be booted\n");
 	}
 
 	return status;
@@ -799,7 +824,6 @@ int board_late_init(void)
 	puts("Entering late board init...\n");
 
 #ifdef CONFIG_IMX_SPI_CDCM6208
-	int i;
 	puts("Probing CDCM6208...\n");
 	gpio_direction_output(IMX_GPIO_NR(4, 24), 0);
 
