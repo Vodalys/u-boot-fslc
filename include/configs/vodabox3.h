@@ -14,10 +14,8 @@
 #define CONFIG_DISPLAY_CPUINFO
 #define CONFIG_DISPLAY_BOARDINFO
 
-#define CONFIG_MACH_TYPE	3980
-#define CONFIG_CONSOLE_DEV		"ttymxc0"
-#define CONFIG_MMCROOT			"/dev/mmcblk0p2"
-#define CONFIG_DEFAULT_FDT_FILE	"imx6q-vodabox3.dtb"
+#define CONFIG_MACH_TYPE	        3980
+#define CONFIG_CONSOLE_DEV        "ttymxc0"
 
 #include <asm/arch/imx-regs.h>
 #include <asm/imx-common/gpio.h>
@@ -47,25 +45,32 @@
 //#define CONFIG_CMD_BMODE
 
 #include "mx6sabre_common.h"
-/*
-#define	CONFIG_EXTRA_ENV_SETTINGS					\
-		"netdev=eth0\0"						\
-		"ethprime=FEC0\0"					\
-		"uboot=u-boot.bin\0"			\
-		"kernel=uImage\0"				\
-		"nfsroot=/opt/eldk/arm\0"				\
-		"bootargs_base=setenv bootargs console=ttymxc1,115200\0"\
-		"bootargs_nfs=setenv bootargs ${bootargs} root=/dev/nfs "\
-			"ip=dhcp nfsroot=${serverip}:${nfsroot},v3,tcp\0"\
-		"bootcmd_net=run bootargs_base bootargs_nfs; "		\
-			"tftpboot ${loadaddr} ${kernel}; bootm\0"	\
-		"bootargs_mmc=setenv bootargs ${bootargs} ip=dhcp "     \
-			"root=/dev/mmcblk0p1 rootwait\0"                \
-		"bootcmd_mmc=run bootargs_base bootargs_mmc; "   \
-		"mmc dev 0; "	\
-		"mmc read ${loadaddr} 0x800 0x2000; bootm\0"	\
-		"bootcmd=run bootcmd_net\0"                             \
-*/
+
+#define CONFIG_EXTRA_ENV_SETTINGS \
+	"console=" CONFIG_CONSOLE_DEV "\0" \
+	"image=/boot/zImage\0" \
+	"fdt_file=/boot/imx6q-vodabox3.dtb\0" \
+	"fdt_addr=0x18000000\0" \
+	"mmcdev=" __stringify(CONFIG_SYS_MMC_ENV_DEV) "\0" \
+	"mmcpart=1\0" \
+	"mmcdevlinux=/dev/mmcblk" __stringify(CONFIG_SYS_MMC_ENV_DEV) "\0" \
+	"mmcargs=setenv bootargs console=${console},${baudrate} " \
+		"root=${mmcdevlinux}p${mmcpart} rootwait rw\0" \
+	"loadimage=ext4load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${image}\0" \
+	"loadfdt=ext4load mmc ${mmcdev}:${mmcpart} ${fdt_addr} ${fdt_file}\0" \
+	"mmcboot=echo Booting from mmc ...; " \
+		"run mmcargs; " \
+		"if run loadfdt; then " \
+			"bootz ${loadaddr} - ${fdt_addr}; " \
+		"else " \
+			"echo WARN: Cannot load the DT; " \
+		"fi;\0"
+
+#define CONFIG_BOOTCOMMAND \
+	"mmc dev ${mmcdev}; " \
+	"run loadimage; " \
+	"run mmcboot;"
+
 
 #define CONFIG_SYS_FSL_USDHC_NUM	2
 #if defined(CONFIG_ENV_IS_IN_MMC)
