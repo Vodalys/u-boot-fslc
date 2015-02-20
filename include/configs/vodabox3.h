@@ -33,7 +33,7 @@
 #define CONFIG_MXC_UART
 #define CONFIG_MXC_UART_BASE	UART1_BASE
 /* allow to overwrite serial and ethaddr */
-#define CONFIG_ENV_OVERWRITE
+/*#define CONFIG_ENV_OVERWRITE*/
 #define CONFIG_CONS_INDEX	       1
 #define CONFIG_BAUDRATE			       115200
 #define CONFIG_SYS_BAUDRATE_TABLE	{9600, 19200, 38400, 57600, 115200}
@@ -90,6 +90,12 @@
 #define CONFIG_SYS_I2C
 #define CONFIG_SYS_I2C_MXC
 #define CONFIG_SYS_I2C_SPEED		100000
+
+/* PMIC */
+#define CONFIG_POWER
+#define CONFIG_POWER_I2C
+#define CONFIG_POWER_PFUZE100
+#define CONFIG_POWER_PFUZE100_I2C_ADDR	0x08
 
 /*
  * SATA Configs
