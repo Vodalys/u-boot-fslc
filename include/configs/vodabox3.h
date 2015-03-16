@@ -218,8 +218,10 @@
 /* CDCM6208 */
 #if 1
 #define	CONFIG_IMX_SPI_CDCM6208
-#define	CONFIG_IMX_SPI_CDCM6208_BUS	2
+#define	CONFIG_IMX_SPI_BUS		2
 #define CONFIG_IMX_SPI_CDCM6208_CS	0
+#define CONFIG_IMX_SPI_LMH0395_0_CS	1
+#define CONFIG_IMX_SPI_LMH0395_1_CS	2
 #endif
 
 #endif                         /* __VODABOX3_CONFIG_H */

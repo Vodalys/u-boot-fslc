@@ -815,7 +815,7 @@ int cdcm6208_calibrate (struct spi_slave *slave)
 
 struct spi_slave *spi_cdcm6208_probe(void)
 {
-	return spi_setup_slave(CONFIG_IMX_SPI_CDCM6208_BUS, CONFIG_IMX_SPI_CDCM6208_CS, 2500000, 0);
+	return spi_setup_slave(CONFIG_IMX_SPI_BUS, CONFIG_IMX_SPI_CDCM6208_CS, 2500000, 0);
 }
 
 void spi_cdcm6208_free(struct spi_slave *slave)
@@ -883,6 +883,79 @@ static int pfuze_init(void)
 	return 0;
 }
 
+struct spi_slave *spi_lmh0395_probe(u8 id)
+{
+	if (id == 0)
+		return spi_setup_slave(CONFIG_IMX_SPI_BUS, CONFIG_IMX_SPI_LMH0395_0_CS, 2500000, 0);
+	else
+		return spi_setup_slave(CONFIG_IMX_SPI_BUS, CONFIG_IMX_SPI_LMH0395_1_CS, 2500000, 0);
+}
+
+static bool test_lmh(struct spi_slave *slave, u8 id)
+{
+	bool ret = false;
+	u8 lmh0[2] = {0};
+	/* Read reg 4 => device ID */
+	u8 lmh0_tx[2];
+	lmh0_tx[0] = 0x84;
+	lmh0_tx[1] = 0xff;
+
+	if (id > 1)
+		return false;
+
+	/* All CS up => avoid bus conflict */
+	gpio_direction_output(IMX_GPIO_NR(4, 24), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
+	gpio_direction_output(IMX_GPIO_NR(4, 29), 1);
+
+	/* Select LMH */
+	if (id == 0)
+		gpio_direction_output(IMX_GPIO_NR(4, 25), 0);
+	else
+		gpio_direction_output(IMX_GPIO_NR(4, 28), 0);
+
+	// Initiate SPI transfer
+	if (spi_xfer(slave, 2 * 8, (u8 *)&lmh0_tx[0], NULL, SPI_XFER_BEGIN))
+	{
+		goto finish;
+	}
+
+	if (id == 0) {
+		gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
+		gpio_direction_output(IMX_GPIO_NR(4, 25), 0);
+	} else {
+		gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
+		gpio_direction_output(IMX_GPIO_NR(4, 28), 0);
+	}
+
+	if (spi_xfer(slave, 2 * 8, NULL, (u8 *)&lmh0[0], SPI_XFER_BEGIN | SPI_XFER_END))
+	{
+		goto finish;
+	}
+	switch ((lmh0[1] & 0x30) >> 4) {
+		case 0:	printf("Detected %s on bus %d\n", "LMH0384", id);
+			ret = true;
+			break;
+		case 1:	printf("Detected %s on bus %d\n", "LMH0394", id);
+			ret = true;
+			break;
+		case 2:	printf("Detected %s on bus %d\n", "LMH0395", id);
+			ret = true;
+			break;
+		default: printf("Could not get device ID on bus %d : read 0x%08x\n", id, lmh0[1]);
+			break;
+	}
+
+finish:
+	if (id == 0)
+		gpio_direction_output(IMX_GPIO_NR(4, 25), 1);
+	else
+		gpio_direction_output(IMX_GPIO_NR(4, 28), 1);
+	return ret;
+}
+
+
 int board_late_init(void)
 {
 	puts("Entering late board init...\n");
@@ -917,6 +990,15 @@ int board_late_init(void)
 			puts("Failed !\n");
 		}
 	}
+
+	// CSPI SS1, SS2 & SS3 must be high to avoid bus conflicts
+	gpio_direction_output(IMX_GPIO_NR(4, 24), 1);
+
+	struct spi_slave *lmh0395_slave = spi_lmh0395_probe(0);
+	test_lmh(lmh0395_slave, 0);
+	lmh0395_slave = spi_lmh0395_probe(1);
+	test_lmh(lmh0395_slave, 1);
+
 #endif
 
 #ifdef CONFIG_CMD_BMODE
